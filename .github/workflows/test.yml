@@ -27,4 +27,4 @@ jobs:
 
     - name: Ejecutar pruebas con Pytest (Modo Headless)
       run: |
-        pytest -v
+        pytest -v -s
