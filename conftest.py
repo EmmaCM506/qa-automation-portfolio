@@ -1,8 +1,18 @@
 import os
+import re
+
 import pytest
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+
+
+@pytest.hookimpl(wrapper=True, tryfirst=True)
+def pytest_runtest_makereport(item, call):
+    # Guarda el resultado de cada fase (setup, call, teardown) dentro del test
+    # para que la fixture pueda saber, al terminar, si pasó o falló.
+    reporte = yield
+    setattr(item, f"rep_{reporte.when}", reporte)
+    return reporte
+
 
 @pytest.fixture
 def driver(request):
@@ -12,20 +22,20 @@ def driver(request):
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
-    
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=options)
-    
+
+    # Selenium Manager (incluido desde Selenium 4.6) resuelve el driver solo.
+    driver = webdriver.Chrome(options=options)
+
     yield driver
-    
+
     # --- BLOQUE DE EVIDENCIA AUTOMÁTICA ---
-    # Crear carpeta de evidencias si no existe
-    os.makedirs("evidence", exist_ok=True)
-    
-    # Tomar captura de pantalla al finalizar la prueba
-    test_name = request.node.name
-    screenshot_path = f"evidence/{test_name}.png"
-    driver.save_screenshot(screenshot_path)
-    print(f"\n[EVIDENCIA] Captura guardada en: {screenshot_path}")
-    
-    driver.quit()
+    try:
+        os.makedirs("evidence", exist_ok=True)
+        reporte = getattr(request.node, "rep_call", None)
+        resultado = reporte.outcome.upper() if reporte else "SIN_RESULTADO"
+        nombre = re.sub(r"[^\w\-]", "_", request.node.name)
+        ruta = f"evidence/{nombre}_{resultado}.png"
+        driver.save_screenshot(ruta)
+        print(f"\n[EVIDENCIA] Captura guardada en: {ruta}")
+    finally:
+        driver.quit()
